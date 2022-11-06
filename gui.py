@@ -3,6 +3,7 @@ from tkinter import ttk
 
 from ttkthemes import ThemedTk
 
+from utils import files, about_messagebox
 from utils import get_random_words, get_word_differences, get_correct_typed_characters
 
 # ------------------ CONSTANTS ---------------- #
@@ -37,6 +38,9 @@ class GUI(ttk.Frame):
         self.configure(padding=30)
 
         self.style = None
+
+        self.language = None
+        self.language_options = None
 
         self.words = []
         self.next_word_start_idx = 0
@@ -86,7 +90,24 @@ class GUI(ttk.Frame):
 
     def create_widgets(self):
 
+        my_menu = Menu(self.master)
+        self.master.config(menu=my_menu)
+        self.master.option_add('*tearOff', False)
+        file_menu = Menu(my_menu)
+        my_menu.add_cascade(label='File', menu=file_menu)
+        help_menu = Menu(my_menu)
+        my_menu.add_cascade(label='Help', menu=help_menu)
+        file_menu.add_command(label='Quit', command=self.master.quit)
+        help_menu.add_command(label='About', command=about_messagebox)
+
+        languages = list(files.keys())
+
         # Setup
+        self.language = StringVar()
+        self.language_options = ttk.OptionMenu(self, self.language,
+                                               languages[0], *languages,
+                                               command=self.language_changed)
+
         self.main_label_var = StringVar()
         self.title_label = ttk.Label(self, textvariable=self.main_label_var)
 
@@ -111,9 +132,11 @@ class GUI(ttk.Frame):
         self.reset_button = ttk.Button(self.input_panel, command=self.reset_state)
 
         # Positioning
-        self.title_label.grid(row=0, column=0)
+        self.language_options.grid(row=0, column=0)
 
-        self.info_panel.grid(row=1, column=0)
+        self.title_label.grid(row=1, column=0)
+
+        self.info_panel.grid(row=2, column=0)
         self.cpm_label.grid(row=0, column=0)
         self.cpm_dif_label.grid(row=0, column=1)
         self.ccpm_label.grid(row=0, column=2)
@@ -121,8 +144,8 @@ class GUI(ttk.Frame):
         self.wpm_label.grid(row=0, column=4)
         self.wpm_dif_label.grid(row=0, column=5)
 
-        self.main_text_area.grid(row=2, column=0)
-        self.input_panel.grid(row=3, column=0)
+        self.main_text_area.grid(row=3, column=0)
+        self.input_panel.grid(row=4, column=0)
         self.entry.grid(row=0, column=1, sticky=N+W+S+E)
         self.reset_button.grid(row=0, column=0, sticky=N+W+S+E)
 
@@ -171,6 +194,10 @@ class GUI(ttk.Frame):
         self.master.bind('<Return>', self.reset_state)
         # Disable scrolling with mouse.
         self.main_text_area.bind('<MouseWheel>', lambda e: 'break')
+
+    def language_changed(self, *args):
+
+        self.reset_state()
 
     def revalidate_state(self, *args):
 
@@ -357,7 +384,9 @@ class GUI(ttk.Frame):
 
     def reset_state(self, *args):
 
-        words = get_random_words(num=NUM_WORDS)
+        language = self.language.get()
+
+        words = get_random_words(num=NUM_WORDS, language=language)
 
         if self.timer:
             # Cancel timer
