@@ -21,4 +21,3 @@ def get_correct_typed_characters(expected, actual):
     return len(list(differences))
 
 
-print(get_correct_typed_characters('woad', 'woad'))

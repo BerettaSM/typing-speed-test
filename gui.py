@@ -1,13 +1,14 @@
 from tkinter import *
-from tkinter import ttk
+from tkinter import ttk, messagebox
 from ttkthemes import ThemedTk
 
 from utils import get_random_words, get_word_differences, get_correct_typed_characters
 
 # ------------------ CONSTANTS ---------------- #
-TIME = 60
-NUM_WORDS = 50
+TIME_IN_SECONDS = 60
+NUM_WORDS = 100
 FONT = 'Fira Code'
+TITLE_TEXT_FONT = (FONT, 24)
 MAIN_TEXT_FONT = (FONT, 18)
 HIGHLIGHT_COLOR = '#b3d9ff'
 CORRECT_COLOR = '#47d147'
@@ -59,11 +60,10 @@ class GUI(ttk.Frame):
 
     def create_widgets(self):
 
-        self.main_label_var = StringVar(value='READY')
-        self.main_text_label = ttk.Label(self, textvariable=self.main_label_var)
-        self.main_text_area = Text(self, width=40, height=16, borderwidth=5,
+        self.main_label_var = StringVar()
+        self.main_text_label = ttk.Label(self, textvariable=self.main_label_var, font=TITLE_TEXT_FONT)
+        self.main_text_area = Text(self, width=30, height=10, borderwidth=5,
                                    relief='groove', font=MAIN_TEXT_FONT, wrap='word')
-        self.main_text_area.configure(state='disabled')
         self.entry_val = StringVar()
         self.entry = ttk.Entry(self, textvariable=self.entry_val)
         self.reset_button = ttk.Button(self, text='reset', command=self.reset_state)
@@ -82,12 +82,15 @@ class GUI(ttk.Frame):
         self.main_text_area.tag_config(WRONG_WORD_TAG, foreground=WRONG_COLOR)
 
         # Configuring
+        self.main_text_area.configure(state='disabled')
+        self.entry.focus_set()
         for child in self.winfo_children():
             child.grid(pady=10)
 
     def register_event_listeners(self):
 
         self.update_tracer_id = self.entry_val.trace('w', self.revalidate_state)
+        self.master.bind('<Return>', self.reset_state)
 
     def revalidate_state(self, *args):
 
@@ -96,7 +99,7 @@ class GUI(ttk.Frame):
             self.timer_started = True
             self.start_timer()
 
-        curr_word = self.get_current_word()  # TODO: If this is None, all words were traversed and program should exit.
+        curr_word = self.get_current_word()
 
         # The current entry state.
         user_input = self.entry_val.get()
@@ -118,7 +121,7 @@ class GUI(ttk.Frame):
                 # Clear the entry widget
                 self.entry.delete(0, END)
                 # Update next word's start index
-                self.next_word_start_idx += len(curr_word) + 1  # 1 is the space in between words
+                self.next_word_start_idx += len(curr_word) + 1  # +1 is the space in between words.
 
             self.clear_word_highlighting_tags(curr_word_start_idx, curr_word_end_idx)
 
@@ -127,6 +130,7 @@ class GUI(ttk.Frame):
                 self.correct_words += 1
                 self.highlight_tag_word_as_completed(curr_word_start_idx, curr_word_end_idx, correct_word=True)
 
+            # User got it wrong.
             else:
                 self.highlight_tag_word_as_completed(curr_word_start_idx, curr_word_end_idx, correct_word=False)
 
@@ -134,7 +138,18 @@ class GUI(ttk.Frame):
             correct_characters = get_correct_typed_characters(expected=curr_word, actual=stripped_user_input)
             self.correctly_typed_characters += correct_characters
 
-            self.update_current_word_highlighting()
+            # If this is None, all words were traversed and program should exit.
+            curr_word = self.get_current_word()
+
+            if curr_word:
+                self.update_current_word_highlighting()
+
+            else:
+                self.trigger_end_stats()
+
+            # Auto-scroll to keep upcoming words in view.
+            next_few_characters = 100
+            self.main_text_area.see(f'1.{curr_word_end_idx + next_few_characters}')
 
         else:
             self.typed_characters += 1
@@ -148,6 +163,7 @@ class GUI(ttk.Frame):
             return self.words[curr_word_idx]
 
         except IndexError:
+            # All words were traversed.
             return None
 
     def update_current_word_highlighting(self):
@@ -200,7 +216,7 @@ class GUI(ttk.Frame):
 
     def start_timer(self):
 
-        self.count_down(TIME)
+        self.count_down(TIME_IN_SECONDS)
 
     def count_down(self, count):
 
@@ -211,22 +227,37 @@ class GUI(ttk.Frame):
 
         if count > 0:
 
-            if count != TIME:
+            if count != TIME_IN_SECONDS:
                 self.elapsed_time += 1
+
+            if count < 11:
+                self.main_text_label.configure(foreground=WRONG_COLOR)
 
             self.timer = self.master.after(1000, self.count_down, count - 1)
 
         else:
-            print('Acabou')
+            self.trigger_end_stats()
 
-    def reset_state(self):
+    def trigger_end_stats(self):
 
-        # Debugging
-        print(f'Correct words: {self.correct_words}')
-        print(f'Typed characters: {self.typed_characters}')
-        print(f'Correctly typed characters: {self.correctly_typed_characters}')
+        # CPM - Characters per minute.
+        cpm = self.typed_characters
+        # Corrected CPM.
+        ccpm = self.correctly_typed_characters
+        # WPM - Words per minute.
+        wpm = self.correct_words
 
-        words = get_random_words(num=5)
+        formatted_string = f'CPM: {cpm}.\n'
+        formatted_string += f'Corrected CPM: {ccpm}.\n'
+        formatted_string += f'WPM: {wpm}.'
+
+        messagebox.showinfo(title='END RESULTS', message=formatted_string)
+
+        self.reset_state()
+
+    def reset_state(self, *args):
+
+        words = get_random_words(num=NUM_WORDS)
 
         if self.timer:
             # Cancel timer
@@ -238,9 +269,10 @@ class GUI(ttk.Frame):
         self.correctly_typed_characters = 0
         self.next_word_start_idx = 0
         self.main_label_var.set(value='READY')
+        self.main_text_label.configure(foreground=CORRECT_COLOR)
         self.timer_started = False
 
-        # Need to momentarily disable the trace, otherwise resetting the entry input would trigger a revalidation
+        # Need to momentarily disable the trace, otherwise resetting the entry input would trigger a revalidation.
         self.entry_val.trace_vdelete('w', self.update_tracer_id)
         self.entry_val.set('')
         self.update_tracer_id = self.entry_val.trace('w', self.revalidate_state)
@@ -255,3 +287,4 @@ class GUI(ttk.Frame):
         self.words = words
         self.user_typed_words = []
         self.update_current_word_highlighting()
+        self.entry.focus_set()
