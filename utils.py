@@ -1,12 +1,14 @@
+import os
+import sys
 import random
 import webbrowser
 from tkinter import messagebox
 
 files = {
-    'English': 'words/common_words_en.txt',
-    'Português': 'words/common_words_br.txt',
-    'Español': 'words/common_words_es.txt',
-    'Français': 'words/common_words_fr.txt'
+    'English': 'common_words_en.txt',
+    'Português': 'common_words_br.txt',
+    'Español': 'common_words_es.txt',
+    'Français': 'common_words_fr.txt'
 }
 
 
@@ -29,7 +31,7 @@ def get_random_words(num: int, language: str):
 
     file = files[language]
 
-    with open(file, encoding='utf-8') as f:
+    with open(get_true_filename(file), encoding='utf-8') as f:
         all_words = [word.strip() for word in f.readlines()]
 
     return random.sample(all_words, num)
@@ -54,3 +56,14 @@ def get_correct_typed_characters(expected, actual):
 def open_github():
 
     webbrowser.open('https://github.com/BerettaSM')
+
+
+def get_true_filename(filename):
+
+    try:
+        base_path = sys._MEIPASS
+
+    except Exception:
+        base_path = os.path.join(os.path.abspath("."), 'words')
+
+    return os.path.join(base_path, filename)
