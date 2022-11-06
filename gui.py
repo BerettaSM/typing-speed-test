@@ -1,5 +1,6 @@
 from tkinter import *
-from tkinter import ttk, messagebox
+from tkinter import ttk
+
 from ttkthemes import ThemedTk
 
 from utils import get_random_words, get_word_differences, get_correct_typed_characters
@@ -10,14 +11,16 @@ NUM_WORDS = 100
 FONT = 'Fira Code'
 TITLE_TEXT_FONT = (FONT, 24)
 MAIN_TEXT_FONT = (FONT, 18)
-HIGHLIGHT_COLOR = '#b3d9ff'
-CORRECT_COLOR = '#47d147'
-WRONG_COLOR = '#ff3333'
-CORRECT_LETTER_TAG = 'correct letter'
-CORRECT_WORD_TAG = 'correct word'
-WRONG_LETTER_TAG = 'wrong letter'
-WRONG_WORD_TAG = 'wrong word'
+BUTTON_TEXT_FONT = (FONT, 14)
+BACKGROUND_COLOR = '#FFFFF0'
+HIGHLIGHT_COLOR = '#94CFEB'
+HIGHLIGHT_BORDER_COLOR = '#4EB5EA'
+CORRECT_COLOR = '#47D147'
+WRONG_COLOR = '#FF3333'
+CORRECT_TAG = 'correct letter'
+WRONG_TAG = 'wrong letter'
 HIGHLIGHT_TAG = 'highlighted'
+CENTER_TAG = 'center'
 # --------------------------------------------- #
 
 
@@ -33,6 +36,8 @@ class GUI(ttk.Frame):
         self.grid(row=0, column=0, sticky=N+W+E+S)
         self.configure(padding=30)
 
+        self.style = None
+
         self.words = []
         self.next_word_start_idx = 0
         self.user_typed_words = []
@@ -40,14 +45,35 @@ class GUI(ttk.Frame):
         self.typed_characters = 0
         self.correctly_typed_characters = 0
 
+        self.last_run_cpm = None
+        self.last_run_ccpm = None
+        self.last_run_wpm = None
+
         # This string represents the timer event.
         self.timer = ''
         self.timer_started = False
         self.elapsed_time = 0
 
+        self.info_panel = None
+
+        self.cpm_var = None
+        self.cpm_label = None
+        self.cpm_dif_var = None
+        self.cpm_dif_label = None
+        self.ccpm_var = None
+        self.ccpm_label = None
+        self.ccpm_dif_var = None
+        self.ccpm_dif_label = None
+        self.wpm_var = None
+        self.wpm_label = None
+        self.wpm_dif_var = None
+        self.wpm_dif_label = None
+
         self.main_label_var = None
-        self.main_text_label = None
+        self.title_label = None
         self.main_text_area = None
+
+        self.input_panel = None
 
         self.update_tracer_id = None
         self.entry_val = None
@@ -60,32 +86,84 @@ class GUI(ttk.Frame):
 
     def create_widgets(self):
 
+        # Setup
         self.main_label_var = StringVar()
-        self.main_text_label = ttk.Label(self, textvariable=self.main_label_var, font=TITLE_TEXT_FONT)
-        self.main_text_area = Text(self, width=30, height=10, borderwidth=5,
-                                   relief='groove', font=MAIN_TEXT_FONT, wrap='word')
+        self.title_label = ttk.Label(self, textvariable=self.main_label_var)
+
+        self.info_panel = ttk.Frame(self)
+        self.cpm_var = StringVar(value='CPM: ---')
+        self.cpm_label = ttk.Label(self.info_panel, textvariable=self.cpm_var)
+        self.cpm_dif_var = StringVar()
+        self.cpm_dif_label = ttk.Label(self.info_panel, textvariable=self.cpm_dif_var)
+        self.ccpm_var = StringVar(value='CCPM: ---')
+        self.ccpm_label = ttk.Label(self.info_panel, textvariable=self.ccpm_var)
+        self.ccpm_dif_var = StringVar()
+        self.ccpm_dif_label = ttk.Label(self.info_panel, textvariable=self.ccpm_dif_var)
+        self.wpm_var = StringVar(value='WPM: ---')
+        self.wpm_label = ttk.Label(self.info_panel, textvariable=self.wpm_var)
+        self.wpm_dif_var = StringVar()
+        self.wpm_dif_label = ttk.Label(self.info_panel, textvariable=self.wpm_dif_var)
+
+        self.main_text_area = Text(self)
+        self.input_panel = ttk.Frame(self)
         self.entry_val = StringVar()
-        self.entry = ttk.Entry(self, textvariable=self.entry_val)
-        self.reset_button = ttk.Button(self, text='reset', command=self.reset_state)
+        self.entry = ttk.Entry(self.input_panel, textvariable=self.entry_val)
+        self.reset_button = ttk.Button(self.input_panel, command=self.reset_state)
 
         # Positioning
-        self.main_text_label.grid(row=0, column=0)
-        self.main_text_area.grid(row=1, column=0)
-        self.entry.grid(row=2, column=0, sticky=W+E)
-        self.reset_button.grid(row=3, column=0, sticky=W+E)
+        self.title_label.grid(row=0, column=0)
+
+        self.info_panel.grid(row=1, column=0)
+        self.cpm_label.grid(row=0, column=0)
+        self.cpm_dif_label.grid(row=0, column=1)
+        self.ccpm_label.grid(row=0, column=2)
+        self.ccpm_dif_label.grid(row=0, column=3)
+        self.wpm_label.grid(row=0, column=4)
+        self.wpm_dif_label.grid(row=0, column=5)
+
+        self.main_text_area.grid(row=2, column=0)
+        self.input_panel.grid(row=3, column=0)
+        self.entry.grid(row=0, column=1, sticky=N+W+S+E)
+        self.reset_button.grid(row=0, column=0, sticky=N+W+S+E)
+
+        # Configuring
+        self.configure(padding='30')
+        for child in self.winfo_children():
+            child.grid(pady=10)
+
+        self.info_panel.grid()
+        for i, child in enumerate(self.info_panel.winfo_children()):
+            if i in (1, 3):
+                child.grid(padx=(0, 30))
+
+        self.main_text_area.configure(width=33, height=10, borderwidth=0)
+        self.main_text_area.configure(wrap='word', state='disabled')
+        self.input_panel.configure(padding='10')
+        self.entry.grid(padx=(10, 0))
+        self.entry.focus_set()
+        self.reset_button.configure(text='Reset', width=5)
+
+        # Styling
+        self.style = ttk.Style()
+        self.title_label.configure(font=TITLE_TEXT_FONT, background=BACKGROUND_COLOR)
+        for child in self.info_panel.winfo_children():
+            if child.winfo_class() == 'TLabel':
+                child: ttk.Label
+                child.configure(font=BUTTON_TEXT_FONT, background=BACKGROUND_COLOR)
+
+        self.main_text_area.configure(font=MAIN_TEXT_FONT)
+        self.main_text_area.configure(highlightbackground=HIGHLIGHT_BORDER_COLOR, highlightthickness=1)
+        self.entry.configure(justify='center', font=TITLE_TEXT_FONT)
+        self.style.configure('TButton', font=BUTTON_TEXT_FONT)
+        self.style.configure('TFrame', background=BACKGROUND_COLOR)
 
         # Tags for highlighting
         self.main_text_area.tag_config(HIGHLIGHT_TAG, background=HIGHLIGHT_COLOR)
-        self.main_text_area.tag_config(CORRECT_LETTER_TAG, background=HIGHLIGHT_COLOR, foreground=CORRECT_COLOR)
-        self.main_text_area.tag_config(WRONG_LETTER_TAG, background=HIGHLIGHT_COLOR, foreground=WRONG_COLOR)
-        self.main_text_area.tag_config(CORRECT_WORD_TAG, foreground=CORRECT_COLOR)
-        self.main_text_area.tag_config(WRONG_WORD_TAG, foreground=WRONG_COLOR)
+        self.main_text_area.tag_config(CORRECT_TAG, foreground=CORRECT_COLOR)
+        self.main_text_area.tag_config(WRONG_TAG, foreground=WRONG_COLOR)
 
-        # Configuring
-        self.main_text_area.configure(state='disabled')
-        self.entry.focus_set()
-        for child in self.winfo_children():
-            child.grid(pady=10)
+        # Tag for centering
+        self.main_text_area.tag_config(CENTER_TAG, justify='center')
 
     def register_event_listeners(self):
 
@@ -120,10 +198,12 @@ class GUI(ttk.Frame):
             if len(stripped_user_input) > 0:
                 # Append user word to typed words
                 self.user_typed_words.append(user_input)
-                # Clear the entry widget
-                self.entry.delete(0, END)
+
                 # Update next word's start index
                 self.next_word_start_idx += len(curr_word) + 1  # +1 is the space in between words.
+
+            # Clear the entry widget, this means the widget will never hold a white space.
+            self.entry.delete(0, END)
 
             self.clear_word_highlighting_tags(curr_word_start_idx, curr_word_end_idx)
 
@@ -184,6 +264,11 @@ class GUI(ttk.Frame):
 
             self.clear_word_highlighting_tags(start, end)
 
+            # Normal background highlight
+            self.main_text_area.tag_add(HIGHLIGHT_TAG, f'1.{start}', f'1.{end}')
+
+            # self.entry_val.set('')
+
             for i in range(user_input_len):
 
                 # Compare the words, letter by letter,
@@ -192,27 +277,23 @@ class GUI(ttk.Frame):
 
                 letter_is_right = not differences[i]
 
-                section_start = start + i
-                section_end = section_start + 1
+                letter_start_idx = start + i
+                letter_end_idx = letter_start_idx + 1
 
                 if letter_is_right:
-                    self.main_text_area.tag_add(CORRECT_LETTER_TAG, f'1.{section_start}', f'1.{section_end}')
+                    self.main_text_area.tag_add(CORRECT_TAG, f'1.{letter_start_idx}', f'1.{letter_end_idx}')
 
                 else:
-                    self.main_text_area.tag_add(WRONG_LETTER_TAG, f'1.{section_start}', f'1.{section_end}')
-
-            remainder_start = start + user_input_len
-            # Normal highlight for remainder of the word if there's no more input to compare to.
-            self.main_text_area.tag_add(HIGHLIGHT_TAG, f'1.{remainder_start}', f'1.{end}')
+                    self.main_text_area.tag_add(WRONG_TAG, f'1.{letter_start_idx}', f'1.{letter_end_idx}')
 
     def clear_word_highlighting_tags(self, start_index, end_index):
-        # Clear all current tags
-        for tag in (HIGHLIGHT_TAG, CORRECT_LETTER_TAG, WRONG_LETTER_TAG):
+        # Clear all tags in between indices.
+        for tag in (HIGHLIGHT_TAG, CORRECT_TAG, WRONG_TAG):
             self.main_text_area.tag_remove(tag, f'1.{start_index}', f'1.{end_index}')
 
     def highlight_tag_word_as_completed(self, start_index, end_index, correct_word=False):
 
-        tag = CORRECT_WORD_TAG if correct_word else WRONG_WORD_TAG
+        tag = CORRECT_TAG if correct_word else WRONG_TAG
 
         self.main_text_area.tag_add(tag, f'1.{start_index}', f'1.{end_index}')
 
@@ -233,7 +314,7 @@ class GUI(ttk.Frame):
                 self.elapsed_time += 1
 
             if count < 11:
-                self.main_text_label.configure(foreground=WRONG_COLOR)
+                self.title_label.configure(foreground=WRONG_COLOR)
 
             self.timer = self.master.after(1000, self.count_down, count - 1)
 
@@ -244,16 +325,33 @@ class GUI(ttk.Frame):
 
         # CPM - Characters per minute.
         cpm = self.typed_characters
+        last_cpm = self.last_run_cpm
         # Corrected CPM.
         ccpm = self.correctly_typed_characters
+        last_ccpm = self.last_run_ccpm
         # WPM - Words per minute.
         wpm = self.correct_words
+        last_wpm = self.last_run_wpm
 
-        formatted_string = f'CPM: {cpm}.\n'
-        formatted_string += f'Corrected CPM: {ccpm}.\n'
-        formatted_string += f'WPM: {wpm}.'
+        self.cpm_var.set(f'CPM: {cpm}')
+        self.ccpm_var.set(f'CCPM: {ccpm}')
+        self.wpm_var.set(f'WPM: {wpm}')
 
-        messagebox.showinfo(title='END RESULTS', message=formatted_string)
+        if last_cpm is not None:
+            dif_cpm = cpm - last_cpm
+            dif_ccpm = ccpm - last_ccpm
+            dif_wpm = wpm - last_wpm
+
+            self.cpm_dif_var.set(f'{"+" if dif_cpm >= 0 else "-"}{abs(dif_cpm)}')
+            self.cpm_dif_label.configure(foreground=CORRECT_COLOR if dif_cpm >= 0 else WRONG_COLOR)
+            self.ccpm_dif_var.set(f'{"+" if dif_ccpm >= 0 else "-"}{abs(dif_ccpm)}')
+            self.ccpm_dif_label.configure(foreground=CORRECT_COLOR if dif_ccpm >= 0 else WRONG_COLOR)
+            self.wpm_dif_var.set(f'{"+" if dif_wpm >= 0 else "-"}{abs(dif_wpm)}')
+            self.wpm_dif_label.configure(foreground=CORRECT_COLOR if dif_wpm >= 0 else WRONG_COLOR)
+
+        self.last_run_cpm = cpm
+        self.last_run_ccpm = ccpm
+        self.last_run_wpm = wpm
 
         self.reset_state()
 
@@ -271,7 +369,7 @@ class GUI(ttk.Frame):
         self.correctly_typed_characters = 0
         self.next_word_start_idx = 0
         self.main_label_var.set(value='READY')
-        self.main_text_label.configure(foreground=CORRECT_COLOR)
+        self.title_label.configure(foreground=CORRECT_COLOR)
         self.timer_started = False
 
         # Need to momentarily disable the trace, otherwise resetting entry_val would trigger a revalidation.
@@ -283,7 +381,7 @@ class GUI(ttk.Frame):
         # then disable it again.
         self.main_text_area.configure(state='normal')
         self.main_text_area.delete('1.0', END)
-        self.main_text_area.insert(INSERT, ' '.join(words))
+        self.main_text_area.insert(INSERT, ' '.join(words), CENTER_TAG)
         self.main_text_area.configure(state='disabled')
 
         self.words = words

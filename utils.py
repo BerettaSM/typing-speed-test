@@ -19,5 +19,3 @@ def get_correct_typed_characters(expected, actual):
     differences = get_word_differences(expected, actual)
     differences = filter(lambda elem: not elem, differences)
     return len(list(differences))
-
-
