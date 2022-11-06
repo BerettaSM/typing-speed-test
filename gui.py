@@ -91,6 +91,8 @@ class GUI(ttk.Frame):
 
         self.update_tracer_id = self.entry_val.trace('w', self.revalidate_state)
         self.master.bind('<Return>', self.reset_state)
+        # Disable scrolling with mouse.
+        self.main_text_area.bind('<MouseWheel>', lambda e: 'break')
 
     def revalidate_state(self, *args):
 
@@ -185,7 +187,7 @@ class GUI(ttk.Frame):
             for i in range(user_input_len):
 
                 # Compare the words, letter by letter,
-                # painting that letter green if it's right,
+                # painting that letter green if it's correct,
                 # red if it's wrong.
 
                 letter_is_right = not differences[i]
@@ -272,7 +274,7 @@ class GUI(ttk.Frame):
         self.main_text_label.configure(foreground=CORRECT_COLOR)
         self.timer_started = False
 
-        # Need to momentarily disable the trace, otherwise resetting the entry input would trigger a revalidation.
+        # Need to momentarily disable the trace, otherwise resetting entry_val would trigger a revalidation.
         self.entry_val.trace_vdelete('w', self.update_tracer_id)
         self.entry_val.set('')
         self.update_tracer_id = self.entry_val.trace('w', self.revalidate_state)
