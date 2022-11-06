@@ -4,16 +4,20 @@ from ttkthemes import ThemedTk
 
 from utils import get_random_words, get_word_differences, get_correct_typed_characters
 
-# CONSTANTS
+# ------------------ CONSTANTS ---------------- #
+TIME = 60
+NUM_WORDS = 50
 FONT = 'Fira Code'
 MAIN_TEXT_FONT = (FONT, 18)
 HIGHLIGHT_COLOR = '#b3d9ff'
 CORRECT_COLOR = '#47d147'
 WRONG_COLOR = '#ff3333'
-TIME = 60
-NUM_WORDS = 50
-
-# FUNCTIONS
+CORRECT_LETTER_TAG = 'correct letter'
+CORRECT_WORD_TAG = 'correct word'
+WRONG_LETTER_TAG = 'wrong letter'
+WRONG_WORD_TAG = 'wrong word'
+HIGHLIGHT_TAG = 'highlighted'
+# --------------------------------------------- #
 
 
 class GUI(ttk.Frame):
@@ -43,6 +47,9 @@ class GUI(ttk.Frame):
         self.main_label_var = None
         self.main_text_label = None
         self.main_text_area = None
+
+        self.update_tracer_id = None
+        self.entry_val = None
         self.entry: ttk.Entry | None = None
         self.reset_button = None
 
@@ -57,7 +64,8 @@ class GUI(ttk.Frame):
         self.main_text_area = Text(self, width=40, height=16, borderwidth=5,
                                    relief='groove', font=MAIN_TEXT_FONT, wrap='word')
         self.main_text_area.configure(state='disabled')
-        self.entry = ttk.Entry(self)
+        self.entry_val = StringVar()
+        self.entry = ttk.Entry(self, textvariable=self.entry_val)
         self.reset_button = ttk.Button(self, text='reset', command=self.reset_state)
 
         # Positioning
@@ -66,74 +74,129 @@ class GUI(ttk.Frame):
         self.entry.grid(row=2, column=0, sticky=W+E)
         self.reset_button.grid(row=3, column=0, sticky=W+E)
 
+        # Tags for highlighting
+        self.main_text_area.tag_config(HIGHLIGHT_TAG, background=HIGHLIGHT_COLOR)
+        self.main_text_area.tag_config(CORRECT_LETTER_TAG, background=HIGHLIGHT_COLOR, foreground=CORRECT_COLOR)
+        self.main_text_area.tag_config(WRONG_LETTER_TAG, background=HIGHLIGHT_COLOR, foreground=WRONG_COLOR)
+        self.main_text_area.tag_config(CORRECT_WORD_TAG, foreground=CORRECT_COLOR)
+        self.main_text_area.tag_config(WRONG_WORD_TAG, foreground=WRONG_COLOR)
+
         # Configuring
         for child in self.winfo_children():
             child.grid(pady=10)
 
     def register_event_listeners(self):
 
-        self.entry.bind('<KeyPress>', self.revalidate_state)
+        self.update_tracer_id = self.entry_val.trace('w', self.revalidate_state)
 
-    def revalidate_state(self, event):
+    def revalidate_state(self, *args):
 
         # Start the timer if it isn't already.
         if not self.timer_started:
             self.timer_started = True
             self.start_timer()
-            self.highlight_next_word()
 
-        curr_word = self.get_current_word()
+        curr_word = self.get_current_word()  # TODO: If this is None, all words were traversed and program should exit.
 
         # The current entry state.
-        user_input = self.entry.get().strip()
+        user_input = self.entry_val.get()
+        stripped_user_input = user_input.strip()
+
+        # Update word highlighting
+        self.update_current_word_highlighting()
 
         # If user pressed the space bar
-        if event.char == ' ':
+        if len(user_input) > 0 and user_input[-1] == ' ':
+
+            curr_word_start_idx = self.next_word_start_idx
+            curr_word_end_idx = curr_word_start_idx + len(curr_word)
 
             # If user input has any character other than a space
-            if user_input != '':
+            if len(stripped_user_input) > 0:
                 # Append user word to typed words
                 self.user_typed_words.append(user_input)
                 # Clear the entry widget
                 self.entry.delete(0, END)
-                # Highlight the next word
-                self.highlight_next_word()
+                # Update next word's start index
+                self.next_word_start_idx += len(curr_word) + 1  # 1 is the space in between words
+
+            self.clear_word_highlighting_tags(curr_word_start_idx, curr_word_end_idx)
 
             # If the user correctly typed the word
-            if curr_word == user_input:
+            if curr_word == stripped_user_input:
                 self.correct_words += 1
+                self.highlight_tag_word_as_completed(curr_word_start_idx, curr_word_end_idx, correct_word=True)
+
+            else:
+                self.highlight_tag_word_as_completed(curr_word_start_idx, curr_word_end_idx, correct_word=False)
 
             # Get how many characters the user got right
-            correct_characters = get_correct_typed_characters(expected=curr_word, actual=user_input)
+            correct_characters = get_correct_typed_characters(expected=curr_word, actual=stripped_user_input)
             self.correctly_typed_characters += correct_characters
+
+            self.update_current_word_highlighting()
 
         else:
             self.typed_characters += 1
-
-        # print(len(self.main_area.get('1.0', 'end')))
 
     def get_current_word(self):
 
         # The highlighted word the user is currently trying to type.
 
-        curr_word_idx = len(self.user_typed_words)
-        return self.words[curr_word_idx]
+        try:
+            curr_word_idx = len(self.user_typed_words)
+            return self.words[curr_word_idx]
 
-    def highlight_next_word(self):
+        except IndexError:
+            return None
 
-        tag = 'highlighted'
+    def update_current_word_highlighting(self):
 
         curr_word = self.get_current_word()
         start = self.next_word_start_idx
         end = start + len(curr_word)
 
-        if tag in self.main_text_area.tag_names():
-            self.main_text_area.tag_delete(tag)
+        user_input = self.entry_val.get().strip()
+        user_input_len = len(user_input)
 
-        self.main_text_area.tag_add(tag, f'1.{start}', f'1.{end}')
-        self.main_text_area.tag_config(tag, background=HIGHLIGHT_COLOR)
+        differences = get_word_differences(curr_word, user_input)
 
-        self.next_word_start_idx = end + 1
+        # If user inputted more characters than current word has, there's no need to update the highlighting.
+        if user_input_len <= len(differences):
+
+            self.clear_word_highlighting_tags(start, end)
+
+            for i in range(user_input_len):
+
+                # Compare the words, letter by letter,
+                # painting that letter green if it's right,
+                # red if it's wrong.
+
+                letter_is_right = not differences[i]
+
+                section_start = start + i
+                section_end = section_start + 1
+
+                if letter_is_right:
+                    self.main_text_area.tag_add(CORRECT_LETTER_TAG, f'1.{section_start}', f'1.{section_end}')
+
+                else:
+                    self.main_text_area.tag_add(WRONG_LETTER_TAG, f'1.{section_start}', f'1.{section_end}')
+
+            remainder_start = start + user_input_len
+            # Normal highlight for remainder of the word if there's no more input to compare to.
+            self.main_text_area.tag_add(HIGHLIGHT_TAG, f'1.{remainder_start}', f'1.{end}')
+
+    def clear_word_highlighting_tags(self, start_index, end_index):
+        # Clear all current tags
+        for tag in (HIGHLIGHT_TAG, CORRECT_LETTER_TAG, WRONG_LETTER_TAG):
+            self.main_text_area.tag_remove(tag, f'1.{start_index}', f'1.{end_index}')
+
+    def highlight_tag_word_as_completed(self, start_index, end_index, correct_word=False):
+
+        tag = CORRECT_WORD_TAG if correct_word else WRONG_WORD_TAG
+
+        self.main_text_area.tag_add(tag, f'1.{start_index}', f'1.{end_index}')
 
     def start_timer(self):
 
@@ -158,6 +221,7 @@ class GUI(ttk.Frame):
 
     def reset_state(self):
 
+        # Debugging
         print(f'Correct words: {self.correct_words}')
         print(f'Typed characters: {self.typed_characters}')
         print(f'Correctly typed characters: {self.correctly_typed_characters}')
@@ -175,9 +239,13 @@ class GUI(ttk.Frame):
         self.next_word_start_idx = 0
         self.main_label_var.set(value='READY')
         self.timer_started = False
-        self.entry.delete(0, END)
 
-        # Main text widget is disabled to avoid tampering, need to enable it again to modify its contents,
+        # Need to momentarily disable the trace, otherwise resetting the entry input would trigger a revalidation
+        self.entry_val.trace_vdelete('w', self.update_tracer_id)
+        self.entry_val.set('')
+        self.update_tracer_id = self.entry_val.trace('w', self.revalidate_state)
+
+        # Main text widget is disabled to avoid tampering, need to enable it to modify its contents,
         # then disable it again.
         self.main_text_area.configure(state='normal')
         self.main_text_area.delete('1.0', END)
@@ -186,11 +254,4 @@ class GUI(ttk.Frame):
 
         self.words = words
         self.user_typed_words = []
-
-
-# def add_highlighter():
-#     if 'start' in text.tag_names():
-#         text.tag_delete('start')
-#     else:
-#         text.tag_add("start", "1.76", "1.150")
-#         text.tag_config("start", background="black", foreground="white")
+        self.update_current_word_highlighting()

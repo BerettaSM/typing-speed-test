@@ -12,7 +12,7 @@ def get_random_words(num: int):
 def get_word_differences(expected, actual):
     def compare_letter(a, b):
         return a != b
-    return map(compare_letter, expected, actual)
+    return list(map(compare_letter, expected, actual))
 
 
 def get_correct_typed_characters(expected, actual):
@@ -21,4 +21,4 @@ def get_correct_typed_characters(expected, actual):
     return len(list(differences))
 
 
-print(get_correct_typed_characters('', 'woad'))
+print(get_correct_typed_characters('woad', 'woad'))
