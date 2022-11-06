@@ -1,10 +1,13 @@
+import io
 from tkinter import *
 from tkinter import ttk
 
 from ttkthemes import ThemedTk
+from PIL import Image, ImageTk
 
 from utils import files, about_messagebox
 from utils import get_random_words, get_word_differences, get_correct_typed_characters
+from images import ICON
 
 # ------------------ CONSTANTS ---------------- #
 TIME_IN_SECONDS = 60
@@ -33,6 +36,9 @@ class GUI(ttk.Frame):
 
         self.master: ThemedTk = master
         self.master.title('Typing Speed Test')
+
+        icon = ImageTk.PhotoImage(Image.open(io.BytesIO(ICON)))
+        self.master.wm_iconphoto(False, icon)
 
         self.grid(row=0, column=0, sticky=N+W+E+S)
         self.configure(padding=30)
