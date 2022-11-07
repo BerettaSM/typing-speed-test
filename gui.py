@@ -11,7 +11,7 @@ from images import ICON
 
 # ------------------ CONSTANTS ---------------- #
 TIME_IN_SECONDS = 60
-NUM_WORDS = 100
+NUM_WORDS = 200
 FONT = 'Fira Code'
 TITLE_TEXT_FONT = (FONT, 24)
 MAIN_TEXT_FONT = (FONT, 18)
@@ -20,6 +20,7 @@ BACKGROUND_COLOR = '#FFFFF0'
 HIGHLIGHT_COLOR = '#94CFEB'
 HIGHLIGHT_BORDER_COLOR = '#4EB5EA'
 CORRECT_COLOR = '#47D147'
+WARNING_COLOR = '#FCB814'
 WRONG_COLOR = '#FF3333'
 CORRECT_TAG = 'correct letter'
 WRONG_TAG = 'wrong letter'
@@ -36,6 +37,7 @@ class GUI(ttk.Frame):
 
         self.master: ThemedTk = master
         self.master.title('Typing Speed Test')
+        self.master.resizable(width=False, height=False)
 
         icon = ImageTk.PhotoImage(Image.open(io.BytesIO(ICON)))
         self.master.wm_iconphoto(False, icon)
@@ -58,11 +60,11 @@ class GUI(ttk.Frame):
         self.last_run_cpm = None
         self.last_run_ccpm = None
         self.last_run_wpm = None
+        self.last_run_accuracy = None
 
         # This string represents the timer event.
         self.timer = ''
         self.timer_started = False
-        self.elapsed_time = 0
 
         self.info_panel = None
 
@@ -78,6 +80,10 @@ class GUI(ttk.Frame):
         self.wpm_label = None
         self.wpm_dif_var = None
         self.wpm_dif_label = None
+        self.accuracy_var = None
+        self.accuracy_label = None
+        self.accuracy_diff_var = None
+        self.accuracy_diff_label = None
 
         self.main_label_var = None
         self.title_label = None
@@ -130,6 +136,10 @@ class GUI(ttk.Frame):
         self.wpm_label = ttk.Label(self.info_panel, textvariable=self.wpm_var)
         self.wpm_dif_var = StringVar()
         self.wpm_dif_label = ttk.Label(self.info_panel, textvariable=self.wpm_dif_var)
+        self.accuracy_var = StringVar(value='ACC: ---')
+        self.accuracy_label = ttk.Label(self.info_panel, textvariable=self.accuracy_var)
+        self.accuracy_diff_var = StringVar()
+        self.accuracy_diff_label = ttk.Label(self.info_panel, textvariable=self.accuracy_diff_var)
 
         self.main_text_area = Text(self)
         self.input_panel = ttk.Frame(self)
@@ -139,7 +149,6 @@ class GUI(ttk.Frame):
 
         # Positioning
         self.language_options.grid(row=0, column=0)
-
         self.title_label.grid(row=1, column=0)
 
         self.info_panel.grid(row=2, column=0)
@@ -149,6 +158,8 @@ class GUI(ttk.Frame):
         self.ccpm_dif_label.grid(row=0, column=3)
         self.wpm_label.grid(row=0, column=4)
         self.wpm_dif_label.grid(row=0, column=5)
+        self.accuracy_label.grid(row=0, column=6)
+        self.accuracy_diff_label.grid(row=0, column=7)
 
         self.main_text_area.grid(row=3, column=0)
         self.input_panel.grid(row=4, column=0)
@@ -162,15 +173,15 @@ class GUI(ttk.Frame):
 
         self.info_panel.grid()
         for i, child in enumerate(self.info_panel.winfo_children()):
-            if i in (1, 3):
-                child.grid(padx=(0, 30))
+            if i in (2, 4, 6):
+                child.grid(padx=(15, 0))
 
-        self.main_text_area.configure(width=33, height=10, borderwidth=0)
+        self.main_text_area.configure(width=45, height=10, borderwidth=0)
         self.main_text_area.configure(wrap='word', state='disabled')
         self.input_panel.configure(padding='10')
         self.entry.grid(padx=(10, 0))
         self.entry.focus_set()
-        self.reset_button.configure(text='Reset', width=5)
+        self.reset_button.configure(text='Reset', width=10)
 
         # Styling
         self.style = ttk.Style()
@@ -182,7 +193,7 @@ class GUI(ttk.Frame):
 
         self.main_text_area.configure(font=MAIN_TEXT_FONT)
         self.main_text_area.configure(highlightbackground=HIGHLIGHT_BORDER_COLOR, highlightthickness=1)
-        self.entry.configure(justify='center', font=TITLE_TEXT_FONT)
+        self.entry.configure(justify='center', font=TITLE_TEXT_FONT, width=26)
         self.style.configure('TButton', font=BUTTON_TEXT_FONT)
         self.style.configure('TFrame', background=BACKGROUND_COLOR)
 
@@ -215,7 +226,7 @@ class GUI(ttk.Frame):
         curr_word = self.get_current_word()
 
         # The current entry state.
-        user_input = self.entry_val.get()
+        user_input = self.entry_val.get().lower()
         stripped_user_input = user_input.strip()
 
         # Update word highlighting
@@ -287,7 +298,7 @@ class GUI(ttk.Frame):
         start = self.next_word_start_idx
         end = start + len(curr_word)
 
-        user_input = self.entry_val.get().strip()
+        user_input = self.entry_val.get().strip().lower()
         user_input_len = len(user_input)
 
         differences = get_word_differences(curr_word, user_input)
@@ -343,11 +354,11 @@ class GUI(ttk.Frame):
 
         if count > 0:
 
-            if count != TIME_IN_SECONDS:
-                self.elapsed_time += 1
-
-            if count < 11:
+            if count < TIME_IN_SECONDS * .15:
                 self.title_label.configure(foreground=WRONG_COLOR)
+
+            elif count < TIME_IN_SECONDS * .4:
+                self.title_label.configure(foreground=WARNING_COLOR)
 
             self.timer = self.master.after(1000, self.count_down, count - 1)
 
@@ -365,15 +376,20 @@ class GUI(ttk.Frame):
         # WPM - Words per minute.
         wpm = self.correct_words
         last_wpm = self.last_run_wpm
+        # Accuracy
+        acc = round(ccpm / cpm * 100, 2)
+        last_run_acc = self.last_run_accuracy
 
         self.cpm_var.set(f'CPM: {cpm}')
         self.ccpm_var.set(f'CCPM: {ccpm}')
         self.wpm_var.set(f'WPM: {wpm}')
+        self.accuracy_var.set(f'ACC: {acc}%')
 
         if last_cpm is not None:
             dif_cpm = cpm - last_cpm
             dif_ccpm = ccpm - last_ccpm
             dif_wpm = wpm - last_wpm
+            dif_acc = round(acc - last_run_acc, 2)
 
             self.cpm_dif_var.set(f'{"+" if dif_cpm >= 0 else "-"}{abs(dif_cpm)}')
             self.cpm_dif_label.configure(foreground=CORRECT_COLOR if dif_cpm >= 0 else WRONG_COLOR)
@@ -381,10 +397,13 @@ class GUI(ttk.Frame):
             self.ccpm_dif_label.configure(foreground=CORRECT_COLOR if dif_ccpm >= 0 else WRONG_COLOR)
             self.wpm_dif_var.set(f'{"+" if dif_wpm >= 0 else "-"}{abs(dif_wpm)}')
             self.wpm_dif_label.configure(foreground=CORRECT_COLOR if dif_wpm >= 0 else WRONG_COLOR)
+            self.accuracy_diff_var.set(f'{"+" if dif_acc >= 0 else "-"}{abs(dif_acc)}%')
+            self.accuracy_diff_label.configure(foreground=CORRECT_COLOR if dif_acc >= 0 else WRONG_COLOR)
 
         self.last_run_cpm = cpm
         self.last_run_ccpm = ccpm
         self.last_run_wpm = wpm
+        self.last_run_accuracy = acc
 
         self.reset_state()
 
@@ -398,7 +417,6 @@ class GUI(ttk.Frame):
             # Cancel timer
             self.master.after_cancel(self.timer)
 
-        self.elapsed_time = 0
         self.correct_words = 0
         self.typed_characters = 0
         self.correctly_typed_characters = 0
